@@ -1,0 +1,13 @@
+/bin
+/.editorconfig
+/.env
+/.env.example
+/.gitattributes
+/.gitignore
+/Makefile
+/readme.MD
+
+.DS_Store
+desktop.ini
+.icloud
+*.icloud
