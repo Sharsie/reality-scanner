@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/Sharsie/reality-scanner/cmd/scan/config"
 	"github.com/Sharsie/reality-scanner/cmd/scan/logger"
-	"github.com/Sharsie/reality-scanner/cmd/scan/reality"
 	"github.com/Sharsie/reality-scanner/cmd/scan/slack"
 	"github.com/Sharsie/reality-scanner/cmd/scan/sreality"
 	"github.com/Sharsie/reality-scanner/cmd/scan/version"
@@ -21,24 +23,6 @@ func main() {
 		l.Debug("Built at %s from commit hash '%s'", version.BuildTime, version.Commit)
 	}
 
-	if config.Debug {
-		images := make([]string, 0)
-		images = append(images, "https://d18-a.sdn.cz/d_18/c_img_gY_K/0lsdFo.jpeg?fl=res,400,300,3%7Cshr,,20%7Cjpg,90")
-		images = append(images, "https://d18-a.sdn.cz/d_18/c_img_gT_K/xMPdF2.jpeg?fl=res,400,300,3%7Cshr,,20%7Cjpg,90")
-		slack.SendNewReality(&l, reality.KnownReality{
-			Deletable: false,
-			Id:        "x",
-			Images:    images,
-			IsNew:     false,
-			Link:      "https://seznam.cz",
-			Place:     "Some nice place",
-			Price:     50000,
-			Title:     "Je to fakt hezkly no",
-		})
-
-		log.Fatal("")
-	}
-
 	statusCheck := time.NewTicker(config.StatusCheckPeriod)
 
 	realities, err := sreality.Initialize(&l)
@@ -50,6 +34,24 @@ func main() {
 
 	l.Debug("Initialized with %d realities", len(realities))
 	slack.Send(&l, fmt.Sprintf("<@U01C5RDRAKZ> <@U01CH3DQ9EH> Restartoval se scanner, začínáme s %d realitama", len(realities)))
+
+	// gracefulStop is a channel of os.Signals that we will watch for -SIGTERM
+	var gracefulStop = make(chan os.Signal)
+
+	// watch for SIGTERM and SIGINT from the operating system, and notify the app on
+	// the gracefulStop channel
+	signal.Notify(gracefulStop, syscall.SIGTERM)
+	signal.Notify(gracefulStop, syscall.SIGINT)
+
+	// launch a worker whose job it is to always watch for gracefulStop signals
+	go func() {
+		// wait for our os signal to stop the app
+		// on the graceful stop channel
+		// this goroutine will block until we get an OS signal
+		<-gracefulStop
+		slack.Send(&l, fmt.Sprintf("<@U01C5RDRAKZ> <@U01CH3DQ9EH> Nějak se stalo, že jsem se vypnul, omlouvám se, měl jsem v zásobě %d realit", len(realities)))
+		os.Exit(0)
+	}()
 
 	for {
 		select {

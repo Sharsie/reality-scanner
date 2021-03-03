@@ -84,3 +84,7 @@ develop/%:
 
 develop: develop/scan
 .PHONY: develop
+
+scp: test
+	@scp -rp ../reality-scanner punctuator:/tmp
+.PHONY: scp
