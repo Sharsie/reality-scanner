@@ -11,7 +11,7 @@ WORKDIR /go/src/github.com/Sharsie/$APP_NAME/
 
 COPY ["./cmd", "./cmd"]
 COPY ["./go.mod", "./go.mod"]
-COPY ["./go.sum", "./go.sum"]
+#COPY ["./go.sum", "./go.sum"]
 
 ENV GOOS=linux
 ENV GOARCH=amd64

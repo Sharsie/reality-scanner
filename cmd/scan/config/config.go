@@ -76,5 +76,6 @@ func Duration(name string, defaultValue time.Duration, required bool) (val time.
 
 var StatusCheckPeriod = Duration("STATUS_CHECK_PERIOD", 5*time.Minute, false)
 var SrealityEndpoint = String("SREALITY_ENDPOINT", "", true)
+var SlackWebhookUrl = String("SLACK_WEBHOOK_URL", "", true)
 
 var Debug = Bool("DEBUG", false, false)

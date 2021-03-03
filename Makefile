@@ -15,7 +15,7 @@ DOCKER_USER	:= $(shell id -u):$(shell id -g)
 HOME_CACHE_DIR  := $$HOME/.cache
 GO_CACHE_DIR	:= $(or $(GOCACHE), $(HOME_CACHE_DIR)/go-build)
 
-REGISTRY	:= docksee
+REGISTRY	:= dr.cechis.cz
 APP_NAME 	:= reality-scanner
 
 -include .env

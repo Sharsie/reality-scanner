@@ -3,41 +3,123 @@ package sreality
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Sharsie/reality-scanner/cmd/scan/config"
 	"github.com/Sharsie/reality-scanner/cmd/scan/logger"
+	"github.com/Sharsie/reality-scanner/cmd/scan/reality"
 )
 
+type Estate struct {
+	IsNew    bool   `json:"new"`
+	Id       int64  `json:"hash_id"`
+	Locality string `json:"locality"`
+	Links    struct {
+		Images []struct {
+			Href string `json:"href"`
+		} `json:"images"`
+		Self struct {
+			Href string `json:"href"`
+		} `json:"self"`
+	} `json:"_links"`
+	Name  string `json:"name"`
+	Paid  int    `json:"paid_logo"`
+	Price int    `json:"price"`
+	Seo   struct {
+		Locality string `json:"locality"`
+	} `json:"seo"`
+}
+
 type responseData struct {
-	_embedded struct {
-		estates []struct {
-			IsNew bool `json:"new"`
-			Id int `json:"hash_id"`
-			Locality string `json:"locality"`
-		}
-	}
+	Embedded struct {
+		Estates []Estate `json:"estates"`
+	} `json:"_embedded"`
+	Page    int `json:"page"`
+	PerPage int `json:"per_page"`
+	Size    int `json:"result_size"`
 }
 
-type knownReality struct {
-	Id    int
-	IsNew bool
-}
+var realities reality.KnownRealities
 
-type knownRealities map[int]knownReality
-
-var realities knownRealities
-
-func Initialize(l *logger.Log) (knownRealities, error) {
+func Initialize(l *logger.Log) (reality.KnownRealities, error) {
 	l.Debug("Initializing sreality")
 
 	client := http.Client{Timeout: 5 * time.Second}
-	response, err := client.Get(config.SrealityEndpoint)
+
+	var err error
+	realities, err = fetchRealities(l, client)
+
+	return realities, err
+}
+
+func CheckForNew(l *logger.Log) (reality.KnownRealities, reality.KnownRealities, error) {
+	l.Debug("Checking sreality")
+
+	client := http.Client{Timeout: 5 * time.Second}
+	currentRealities, err := fetchRealities(l, client)
 
 	if err != nil {
-		return nil, errors.New("Could not initialize sreality");
+		return nil, nil, err
+	}
+
+	deletedRealities := make(reality.KnownRealities)
+
+	for id, item := range realities {
+		_, exists := currentRealities[id]
+
+		if exists == false && item.Deletable {
+			deletedRealities[id] = item
+			delete(realities, id)
+			continue
+		}
+
+		// The reality already exists
+		delete(currentRealities, id)
+	}
+
+	for id, item := range currentRealities {
+		realities[id] = item
+	}
+
+	return currentRealities, deletedRealities, nil
+}
+
+func fetchRealities(l *logger.Log, client http.Client) (reality.KnownRealities, error) {
+	estates := make([]Estate, 0)
+
+	i := 0
+	for {
+		i++
+		data, err := recursiveFetch(l, client, i)
+
+		if err != nil {
+			return nil, err
+		}
+
+		for _, estate := range data.Embedded.Estates {
+			estates = append(estates, estate)
+		}
+
+		if data.PerPage*i > data.Size {
+			break
+		}
+	}
+
+	return createRealities(estates), nil
+}
+
+func recursiveFetch(l *logger.Log, client http.Client, page int) (*responseData, error) {
+	pagedUrl := fmt.Sprintf("%s&page=%d", config.SrealityEndpoint, page)
+
+	response, err := client.Get(pagedUrl)
+
+	if err != nil {
+		l.Debug("%s", err)
+		return nil, errors.New("Could not initialize sreality")
 	}
 
 	defer response.Body.Close()
@@ -45,6 +127,7 @@ func Initialize(l *logger.Log) (knownRealities, error) {
 	body, err := ioutil.ReadAll(response.Body)
 
 	if err != nil {
+		l.Debug("%s", err)
 		return nil, errors.New("Could not decode sreality response body")
 	}
 
@@ -53,79 +136,36 @@ func Initialize(l *logger.Log) (knownRealities, error) {
 	err = json.Unmarshal(body, &data)
 
 	if err != nil {
-		return nil, errors.New("Could not unmarshal sreality ersponse")
+		l.Debug("Error> %v", err)
+		return nil, errors.New("Could not unmarshal sreality response")
 	}
 
-	realities = make(knownRealities)
-
-	for _, estate := range data._embedded.estates {
-		reality := knownReality{
-			Id: estate.Id,
-			IsNew: estate.IsNew,
-		}
-
-		realities[estate.Id] = reality
-	}
-
-	return realities, nil
+	return &data, nil
 }
 
-func CheckForNew(l *logger.Log) (knownRealities, knownRealities, error) {
-	l.Debug("Checking sreality")
+func createRealities(estates []Estate) reality.KnownRealities {
+	currentRealities := make(reality.KnownRealities)
 
-	client := http.Client{Timeout: 5 * time.Second}
-	response, err := client.Get(config.SrealityEndpoint)
+	for _, estate := range estates {
+		images := make([]string, 0)
 
-	if err != nil {
-		return nil, nil, errors.New("Could not initialize sreality");
-	}
-
-	defer response.Body.Close()
-
-	body, err := ioutil.ReadAll(response.Body)
-
-	if err != nil {
-		return nil, nil, errors.New("Could not decode sreality response body")
-	}
-
-	var data responseData
-
-	err = json.Unmarshal(body, &data)
-
-	if err != nil {
-		return nil, nil, errors.New("Could not unmarshal sreality ersponse")
-	}
-
-	currentRealities := make(knownRealities)
-	deletedRealities := make(knownRealities)
-	newRealities := make(knownRealities)
-
-	for _, estate := range data._embedded.estates {
-		reality := knownReality{
-			Id: estate.Id,
-			IsNew: estate.IsNew,
+		for _, image := range estate.Links.Images {
+			images = append(images, image.Href)
 		}
 
-		currentRealities[estate.Id] = reality
-
-		_, exists := realities[estate.Id]
-		if exists == false {
-			newRealities[estate.Id] = reality
-		}
-	}
-
-	for id, reality := range realities {
-		_, exists := currentRealities[id]
-
-		if exists == false {
-			deletedRealities[id] = reality
-			delete(realities, id)
-			continue
+		item := reality.KnownReality{
+			Deletable: estate.Paid == 0,
+			Id:        strconv.FormatInt(estate.Id, 10),
+			Images:    images,
+			IsNew:     estate.IsNew,
+			Link:      fmt.Sprintf("https://www.sreality.cz/detail/prodej/pozemek/bydleni/%s/%s", estate.Seo.Locality, strconv.FormatInt(estate.Id, 10)),
+			Place:     estate.Locality,
+			Price:     estate.Price,
+			Title:     estate.Name,
 		}
 
-		// We could check if it changed somehow
-		delete(currentRealities, id)
+		currentRealities[strconv.FormatInt(estate.Id, 10)] = item
 	}
 
-	return newRealities, deletedRealities, nil
+	return currentRealities
 }
