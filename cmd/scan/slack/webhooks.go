@@ -75,7 +75,7 @@ func SendNewReality(l *logger.Log, item reality.KnownReality) error {
 	l.Debug("Sending slack message for reality id %s", item.Id)
 
 	payload := requestData{
-		"",
+		fmt.Sprintf("Nová nemovitost: %s", item.Title),
 		[]slackBlock{},
 	}
 

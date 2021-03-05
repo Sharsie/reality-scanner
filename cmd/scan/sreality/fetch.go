@@ -69,12 +69,18 @@ func CheckForNew(l *logger.Log) (reality.KnownRealities, reality.KnownRealities,
 	deletedRealities := make(reality.KnownRealities)
 
 	for id, item := range realities {
-		_, exists := currentRealities[id]
+		current, exists := currentRealities[id]
 
-		if exists == false && item.Deletable {
-			deletedRealities[id] = item
-			delete(realities, id)
-			continue
+		if exists == false {
+			item.NotSeenCount = item.NotSeenCount + 1
+
+			if item.Deletable && item.NotSeenCount > 5 {
+				deletedRealities[id] = item
+				delete(realities, id)
+				continue
+			}
+		} else if current.Deletable != item.Deletable {
+			item.Deletable = current.Deletable
 		}
 
 		// The reality already exists
@@ -154,14 +160,15 @@ func createRealities(estates []Estate) reality.KnownRealities {
 		}
 
 		item := reality.KnownReality{
-			Deletable: estate.Paid == 0,
-			Id:        strconv.FormatInt(estate.Id, 10),
-			Images:    images,
-			IsNew:     estate.IsNew,
-			Link:      fmt.Sprintf("https://www.sreality.cz/detail/prodej/pozemek/bydleni/%s/%s", estate.Seo.Locality, strconv.FormatInt(estate.Id, 10)),
-			Place:     estate.Locality,
-			Price:     estate.Price,
-			Title:     estate.Name,
+			Deletable:    estate.Paid == 0,
+			Id:           strconv.FormatInt(estate.Id, 10),
+			Images:       images,
+			IsNew:        estate.IsNew,
+			Link:         fmt.Sprintf("https://www.sreality.cz/detail/prodej/pozemek/bydleni/%s/%s", estate.Seo.Locality, strconv.FormatInt(estate.Id, 10)),
+			Place:        estate.Locality,
+			Price:        estate.Price,
+			Title:        estate.Name,
+			NotSeenCount: 0,
 		}
 
 		currentRealities[strconv.FormatInt(estate.Id, 10)] = item

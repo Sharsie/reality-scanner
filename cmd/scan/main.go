@@ -33,7 +33,7 @@ func main() {
 	}
 
 	l.Debug("Initialized with %d realities", len(realities))
-	slack.Send(&l, fmt.Sprintf("<@U01C5RDRAKZ> <@U01CH3DQ9EH> Restartoval se scanner, začínáme s %d realitama", len(realities)))
+	slack.Send(&l, fmt.Sprintf("<@U01C5RDRAKZ> <@U01CH3DQ9EH> Restartoval se scanner \"%s\", začínáme s %d realitama", config.ScannerID, len(realities)))
 
 	// gracefulStop is a channel of os.Signals that we will watch for -SIGTERM
 	var gracefulStop = make(chan os.Signal)
@@ -49,7 +49,7 @@ func main() {
 		// on the graceful stop channel
 		// this goroutine will block until we get an OS signal
 		<-gracefulStop
-		slack.Send(&l, fmt.Sprintf("<@U01C5RDRAKZ> <@U01CH3DQ9EH> Nějak se stalo, že jsem se vypnul, omlouvám se, měl jsem v zásobě %d realit", len(realities)))
+		slack.Send(&l, fmt.Sprintf("<@U01C5RDRAKZ> <@U01CH3DQ9EH> Nějak se stalo, že jsem se vypnul, omlouvám se, měl jsem v zásobě %d realit a byl jsem \"%s\"", len(realities), config.ScannerID))
 		os.Exit(0)
 	}()
 
