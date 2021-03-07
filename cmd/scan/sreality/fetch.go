@@ -107,7 +107,9 @@ func fetchRealities(l *logger.Log, client http.Client) (reality.KnownRealities, 
 		}
 
 		for _, estate := range data.Embedded.Estates {
-			estates = append(estates, estate)
+			if estate.Price != 1 {
+				estates = append(estates, estate)
+			}
 		}
 
 		if data.PerPage*i > data.Size {
